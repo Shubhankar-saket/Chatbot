@@ -1,11 +1,18 @@
 from flask import Flask, request, jsonify
-import spacy
 import requests
+import spacy
+from spacy.cli import download
 
 app = Flask(__name__)
 
-# Load NLP model
-nlp = spacy.load("en_core_web_sm")
+
+# Try to load the model
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    # If the model is not found, download it
+    download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
 
 CALENDLY_API_TOKEN = "eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzMxNzQ3MTUyLCJqdGkiOiI5OWVlNjA1Yy0wMDJiLTQ2Y2EtOTdjMi1lOTdhMWFkODJkMjUiLCJ1c2VyX3V1aWQiOiJlMDM2MDhlOS1jYmUyLTQ1OTQtYTBmYy01YzVkNDc0MzBlMDcifQ.uzjWHlBGyydpdn41ynOZluX2X2E_KieiDOL3s3Ilwxgim1W6_K1--LVgdD0ZDyq3avo7AUHgZSvItwk8R_Mt3A"
 
