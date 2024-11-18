@@ -5,7 +5,6 @@ from spacy.cli import download
 
 app = Flask(__name__)
 
-
 # Try to load the model
 try:
     nlp = spacy.load("en_core_web_sm")
@@ -48,31 +47,58 @@ def reschedule_appointment(appointment_id, new_time_slot):
         return response.json()
     return {"error": "Failed to reschedule"}
 
+# Handle intent and entity extraction using spaCy
+def handle_intent(message):
+    doc = nlp(message)
+    doctor_name = None
+    time_slot = None
+
+    # Extract doctor name and time slot
+    for ent in doc.ents:
+        if ent.label_ == "PERSON":
+            doctor_name = ent.text
+        elif ent.label_ == "TIME":
+            time_slot = ent.text
+
+    if doctor_name and time_slot:
+        return "Book Appointment", doctor_name, time_slot
+    elif doctor_name:
+        return "Check Availability", doctor_name
+    elif time_slot:
+        return "Reschedule Appointment", time_slot
+    else:
+        return "General Inquiry", message
+
 @app.route('/chat', methods=['POST'])
 def dialogflow_webhook():
     req = request.get_json()
 
-    intent = req.get('queryResult', {}).get('intent', {}).get('displayName')
-    parameters = req.get('queryResult', {}).get('parameters', {})
+    message = req.get('queryResult', {}).get('queryText', '')
+    intent, entity1, entity2 = handle_intent(message)  # entity1 = doctor name, entity2 = time slot
+
     response_text = "Sorry, I didn't understand that."
 
     if intent == "Check Availability":
-        doctor_name = parameters.get('doctor_name', 'Dr. Alice Johnson')
+        doctor_name = entity1
         availability = get_doctor_availability(doctor_name)
-        response_text = f"{doctor_name} is available at: {', '.join(availability)}"
+        response_text = f"{doctor_name} is available at: {', '.join(availability)}" if availability else "Doctor not available"
 
     elif intent == "Book Appointment":
-        doctor_name = parameters.get('doctor_name', 'Dr. Alice Johnson')
-        patient_name = parameters.get('patient_name', 'John Doe')
-        time_slot = parameters.get('time_slot', '10:00 AM')
-        result = book_appointment_with_calendly(doctor_name, patient_name, time_slot)
-        response_text = "Appointment booked successfully!" if "error" not in result else result["error"]
+        if entity1 and entity2:
+            doctor_name = entity1
+            time_slot = entity2
+            patient_name = "John Doe"  # You can dynamically extract the patient's name if needed
+            result = book_appointment_with_calendly(doctor_name, patient_name, time_slot)
+            response_text = "Appointment booked successfully!" if "error" not in result else result["error"]
+        else:
+            response_text = "Please provide both the doctor and the time slot."
 
     elif intent == "Reschedule Appointment":
-        appointment_id = parameters.get('appointment_id')
-        new_time_slot = parameters.get('new_time_slot')
-        result = reschedule_appointment(appointment_id, new_time_slot)
-        response_text = "Appointment rescheduled successfully!" if "error" not in result else result["error"]
+        if entity1 and entity2:
+            appointment_id = entity1  # Assume entity1 is the appointment ID
+            new_time_slot = entity2  # Assume entity2 is the new time slot
+            result = reschedule_appointment(appointment_id, new_time_slot)
+            response_text = "Appointment rescheduled successfully!" if "error" not in result else result["error"]
 
     return jsonify({
         "fulfillmentText": response_text
