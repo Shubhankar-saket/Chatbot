@@ -29,6 +29,7 @@ def book_appointment_with_calendly(doctor_name, patient_name, time_slot):
     headers = {"Authorization": f"Bearer {CALENDLY_API_TOKEN}"}
     data = {
         "doctor_name": doctor_name,
+        "patient_name": patient_name,
         "time_slot": time_slot
     }
     response = requests.post(url, headers=headers, json=data)
@@ -47,24 +48,32 @@ def reschedule_appointment(appointment_id, new_time_slot):
     return {"error": "Failed to reschedule"}
 
 # Handle intent and entity extraction using spaCy
-def handle_intent(message):
+def handle_intent(message, context=None):
     doc = nlp(message)
     doctor_name = None
     time_slot = None
+    specialization = None
 
-    # Extract doctor name and time slot
+    # Extract doctor name, time slot, and specialization (if possible)
     for ent in doc.ents:
         if ent.label_ == "PERSON":
             doctor_name = ent.text
         elif ent.label_ == "TIME":
             time_slot = ent.text
+        elif ent.label_ == "ORG":  # Example: extracting specialization if available
+            specialization = ent.text
 
-    if doctor_name and time_slot:
+    # Check if context has doctor_name
+    if context and 'doctor_name' in context:
+        doctor_name = context['doctor_name']
+
+    if not doctor_name:
+        return "Ask for doctor name", None, None
+
+    if time_slot:
         return "Book Appointment", doctor_name, time_slot
-    elif doctor_name:
-        return "Check Availability", doctor_name
-    elif time_slot:
-        return "Reschedule Appointment", time_slot
+    elif specialization:
+        return "Specialization Inquiry", specialization
     else:
         return "General Inquiry", message
 
@@ -73,7 +82,16 @@ def dialogflow_webhook():
     req = request.get_json()
 
     message = req.get('queryResult', {}).get('queryText', '')
-    intent, entity1, entity2 = handle_intent(message)  # entity1 = doctor name, entity2 = time slot
+    parameters = req.get('queryResult', {}).get('parameters', {})
+    
+    # Pass context from Dialogflow to handle entities better
+    context = None
+    for context_obj in req.get('queryResult', {}).get('outputContexts', []):
+        if context_obj.get('name') == "projects/healthbot-ikjo/agent/sessions/865250f7-bed4-0092-5e21-648e84223d3f/contexts/booking_in_progress":
+            context = context_obj.get('parameters', {})
+
+    # Use the handle_intent function to extract doctor_name and time_slot
+    intent, entity1, entity2 = handle_intent(message, context)
 
     response_text = "Sorry, I didn't understand that."
 
@@ -92,12 +110,11 @@ def dialogflow_webhook():
         else:
             response_text = "Please provide both the doctor and the time slot."
 
-    elif intent == "Reschedule Appointment":
-        if entity1 and entity2:
-            appointment_id = entity1  # Assume entity1 is the appointment ID
-            new_time_slot = entity2  # Assume entity2 is the new time slot
-            result = reschedule_appointment(appointment_id, new_time_slot)
-            response_text = "Appointment rescheduled successfully!" if "error" not in result else result["error"]
+    elif intent == "Specialization Inquiry":
+        response_text = f"I see you're asking about a {entity1}. Could you please confirm the doctor and the time slot?"
+
+    elif intent == "Ask for doctor name":
+        response_text = "Could you please tell me the name of the doctor you'd like to book an appointment with?"
 
     return jsonify({
         "fulfillmentText": response_text
