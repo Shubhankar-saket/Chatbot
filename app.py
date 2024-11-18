@@ -78,6 +78,5 @@ def dialogflow_webhook():
         "fulfillmentText": response_text
     })
 
-# Required for Vercel serverless environment
-def handler(request, context=None):
-    return app(request.environ, start_response=lambda status, headers: None)
+if __name__ == "__main__":
+    app.run(debug=True)
