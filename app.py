@@ -29,7 +29,6 @@ def book_appointment_with_calendly(doctor_name, patient_name, time_slot):
     headers = {"Authorization": f"Bearer {CALENDLY_API_TOKEN}"}
     data = {
         "doctor_name": doctor_name,
-        "patient_name": patient_name,
         "time_slot": time_slot
     }
     response = requests.post(url, headers=headers, json=data)
